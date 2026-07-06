@@ -157,6 +157,19 @@ app.post('/api/services/:id/start', wrap((req) => manager.start(req.params.id)))
 app.post('/api/services/:id/stop', wrap((req) => manager.stop(req.params.id)));
 app.post('/api/services/:id/restart', wrap((req) => manager.restart(req.params.id)));
 
+// start/stop หลายตัวพร้อมกัน (Start Group) — ไม่ให้ตัวที่ fail หยุดตัวอื่น
+app.post('/api/services/bulk-action', wrap(async (req) => {
+  const { ids, action } = req.body ?? {};
+  if (!Array.isArray(ids) || !['start', 'stop', 'restart'].includes(action)) {
+    throw httpError(400, 'ids[] and valid action are required');
+  }
+  const results = await Promise.allSettled(ids.map((id) => manager[action](id)));
+  const errors = results
+    .map((r, i) => (r.status === 'rejected' ? { id: ids[i], error: r.reason?.message ?? 'failed' } : null))
+    .filter(Boolean);
+  return { ok: true, errors };
+}));
+
 app.get('/api/services/:id/logs', wrap((req) => manager.logs.get(req.params.id)?.get() ?? []));
 app.delete('/api/services/:id/logs', wrap((req) => manager.logs.get(req.params.id)?.clear()));
 

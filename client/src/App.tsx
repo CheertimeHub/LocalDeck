@@ -65,6 +65,23 @@ export default function App() {
     }
   };
 
+  // start/stop ทั้งกลุ่มทีเดียว — mark ทุกตัว busy แล้วยิง bulk
+  const groupAction = async (ids: string[], action: 'start' | 'stop') => {
+    setBusy((b) => ({ ...b, ...Object.fromEntries(ids.map((id) => [id, action])) }));
+    try {
+      const { errors } = await api.bulkAction(ids, action);
+      if (errors.length) alert(errors.map((e) => e.error).join('\n'));
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setBusy((b) => {
+        const rest = { ...b };
+        for (const id of ids) delete rest[id];
+        return rest;
+      });
+    }
+  };
+
   const openLogs = async (id: string) => {
     logIdRef.current = id;
     setLogServiceId(id);
@@ -104,7 +121,7 @@ export default function App() {
   return (
     <div className="min-h-screen text-neutral-200" style={{ paddingBottom: logService ? '48vh' : 0 }}>
       <header className="sticky top-0 z-20 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-3">
+        <div className="flex items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-bold text-neutral-100">🚀 LocalDeck</h1>
             <span
@@ -129,26 +146,47 @@ export default function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-6xl space-y-10 px-6 py-8">
+      <main className="space-y-8 px-6 py-6">
         {services.length === 0 ? (
           <Onboarding onImported={() => {}} />
         ) : (
           groupOrder.map((group) => {
             const items = grouped.get(group)!;
             const upCount = items.filter((s) => s.status === 'running' || s.status === 'external').length;
+            // ตัวที่ start ได้ (stopped/crashed) และตัวที่ stop ได้ (กำลังทำงาน)
+            const startable = items.filter((s) => s.status === 'stopped' || s.status === 'crashed').map((s) => s.id);
+            const stoppable = items.filter((s) => s.status === 'running' || s.status === 'starting' || s.status === 'external').map((s) => s.id);
+            const label = group || 'Ungrouped';
             return (
-              <section key={group || '__ungrouped__'} className="space-y-3">
-                {group ? (
-                  <h2 className="flex items-center gap-2 text-sm font-semibold text-neutral-300">
-                    <span>📁 {group}</span>
+              <section key={group || '__ungrouped__'} className="group/section space-y-3">
+                <div className="flex items-center gap-2">
+                  <h2 className={`flex items-center gap-2 text-sm font-semibold ${group ? 'text-neutral-300' : 'text-neutral-500'}`}>
+                    <span>{group ? `📁 ${label}` : label}</span>
                     <span className="text-xs font-normal text-neutral-600">{upCount}/{items.length} up</span>
                   </h2>
-                ) : (
-                  groupNames.length > 0 && (
-                    <h2 className="text-sm font-semibold text-neutral-500">Ungrouped</h2>
-                  )
-                )}
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {/* ปุ่มทั้งกลุ่ม — โผล่ตอน hover เท่านั้น ไม่ให้ UI รก */}
+                  <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/section:opacity-100">
+                    {startable.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => groupAction(startable, 'start')}
+                        className="rounded px-2 py-0.5 text-xs text-emerald-400 hover:bg-emerald-500/10"
+                      >
+                        ▶ Start all
+                      </button>
+                    )}
+                    {stoppable.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => groupAction(stoppable, 'stop')}
+                        className="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10"
+                      >
+                        ■ Stop all
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {items.map((service) => (
                     <ServiceCard
                       key={service.id}

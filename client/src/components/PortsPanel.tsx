@@ -26,10 +26,10 @@ export function PortsPanel({ ports }: { ports: PortInfo[] }) {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-neutral-500">
         Listening Ports <span className="ml-1 font-normal text-neutral-600">({ports.length})</span>
       </h2>
-      <div className="overflow-x-auto rounded-xl border border-neutral-800">
+      <div className="no-scrollbar max-h-[40vh] overflow-auto rounded-xl border border-neutral-800">
         <table className="w-full text-left text-sm">
-          <thead>
-            <tr className="border-b border-neutral-800 bg-neutral-900/80 text-xs uppercase tracking-wider text-neutral-500">
+          <thead className="sticky top-0 z-10">
+            <tr className="border-b border-neutral-800 bg-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
               <th className="px-4 py-2.5 font-medium">Port</th>
               <th className="px-4 py-2.5 font-medium">Process</th>
               <th className="px-4 py-2.5 font-medium">PID</th>

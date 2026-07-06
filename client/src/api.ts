@@ -53,6 +53,12 @@ export const api = {
       body: JSON.stringify({ services }),
     }),
   importableProcesses: () => req<ImportableProcess[]>('/processes/importable'),
+  bulkAction: (ids: string[], action: 'start' | 'stop' | 'restart') =>
+    req<{ ok: boolean; errors: { id: string; error: string }[] }>('/services/bulk-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, action }),
+    }),
 };
 
 export function formatBytes(bytes: number): string {

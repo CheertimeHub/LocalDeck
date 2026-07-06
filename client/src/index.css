@@ -24,3 +24,11 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #444;
 }
+
+/* ซ่อน scrollbar แต่ยัง scroll ได้ (ใช้กับ Ports panel) */
+.no-scrollbar {
+  scrollbar-width: none; /* Firefox */
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none; /* Chrome/Edge */
+}
