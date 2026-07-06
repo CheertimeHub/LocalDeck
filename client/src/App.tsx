@@ -18,6 +18,7 @@ export default function App() {
   const [modal, setModal] = useState<{ open: boolean; edit: ServiceView | null }>({ open: false, edit: null });
   const [busy, setBusy] = useState<Record<string, string>>({});
   const logIdRef = useRef<string | null>(null);
+  const openedRef = useRef<Set<string>>(new Set()); // service ที่ auto-open browser ไปแล้ว (กันเปิดซ้ำ)
 
   const handleMessage = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -32,7 +33,19 @@ export default function App() {
         break;
       case 'status':
         setServices((prev) =>
-          prev.map((s) => (s.id === msg.id ? { ...s, status: msg.status, pid: msg.pid, exitCode: msg.exitCode } : s)),
+          prev.map((s) => {
+            if (s.id !== msg.id) return s;
+            const next = { ...s, status: msg.status, phase: msg.phase, pid: msg.pid, exitCode: msg.exitCode };
+            // auto-open browser: พอ running + ติ๊กไว้ + มี port + ยังไม่เคยเปิดในรอบนี้
+            // (port ถูก auto-detect แล้ว persist ผ่าน services message ก่อนหน้า)
+            if (next.status === 'running' && next.openOnReady && next.port && !openedRef.current.has(s.id)) {
+              openedRef.current.add(s.id);
+              window.open(`http://localhost:${next.port}`, '_blank');
+            }
+            // reset ตอนหยุด เพื่อให้รอบ start หน้าเปิดได้อีก
+            if (next.status === 'stopped' || next.status === 'crashed') openedRef.current.delete(s.id);
+            return next;
+          }),
         );
         break;
       case 'stats':

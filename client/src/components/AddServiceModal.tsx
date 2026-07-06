@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import type { ImportableProcess, ServiceView } from '../types';
+import { useState } from 'react';
+import type { ServiceView } from '../types';
 import { api } from '../api';
 
 interface Props {
@@ -11,7 +11,7 @@ interface Props {
 const FIELD =
   'w-full rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 placeholder-neutral-600 outline-none focus:border-sky-500';
 
-type Step = 'choose' | 'form' | 'process';
+type Step = 'choose' | 'form';
 
 export function AddServiceModal({ edit, groups, onClose }: Props) {
   // edit → เข้าฟอร์มเลย; add ใหม่ → เริ่มที่เมนูเลือกวิธี
@@ -23,6 +23,7 @@ export function AddServiceModal({ edit, groups, onClose }: Props) {
     cwd: edit?.cwd ?? '',
     command: edit?.command ?? '',
     port: edit?.port ? String(edit.port) : '',
+    openOnReady: edit?.openOnReady ?? false,
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -89,23 +90,7 @@ export function AddServiceModal({ edit, groups, onClose }: Props) {
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md space-y-4 rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-2xl"
       >
-        {step === 'choose' && <ChooseStep onScan={scanFolder} onCustom={() => setStep('form')} onProcess={() => setStep('process')} picking={picking} error={error} />}
-
-        {step === 'process' && (
-          <ProcessStep
-            onBack={() => setStep('choose')}
-            onPick={(p) => {
-              setForm((f) => ({
-                ...f,
-                name: p.process.replace(/\.exe$/i, ''),
-                cwd: p.cwd,
-                command: '',
-                port: String(p.port),
-              }));
-              setStep('form');
-            }}
-          />
-        )}
+        {step === 'choose' && <ChooseStep onScan={scanFolder} onCustom={() => setStep('form')} picking={picking} error={error} />}
 
         {step === 'form' && (
           <form onSubmit={submit} className="space-y-4">
@@ -167,6 +152,16 @@ export function AddServiceModal({ edit, groups, onClose }: Props) {
               </label>
             )}
 
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-neutral-300">
+              <input
+                type="checkbox"
+                checked={form.openOnReady}
+                onChange={(e) => setForm((f) => ({ ...f, openOnReady: e.target.checked }))}
+                className="h-4 w-4 accent-sky-500"
+              />
+              🌐 เปิด browser อัตโนมัติเมื่อ service พร้อม
+            </label>
+
             {error && <p className="text-sm text-red-400">{error}</p>}
 
             <div className="flex justify-end gap-2 pt-2">
@@ -193,90 +188,48 @@ export function AddServiceModal({ edit, groups, onClose }: Props) {
 function ChooseStep({
   onScan,
   onCustom,
-  onProcess,
   picking,
   error,
 }: {
   onScan: () => void;
   onCustom: () => void;
-  onProcess: () => void;
   picking: boolean;
   error: string;
 }) {
-  const Option = ({ icon, title, desc, onClick }: { icon: string; title: string; desc: string; onClick: () => void }) => (
+  const Card = ({ icon, title, desc, onClick }: { icon: string; title: string; desc: string; onClick: () => void }) => (
     <button
       type="button"
       onClick={onClick}
       disabled={picking}
-      className="flex w-full items-center gap-3 rounded-lg border border-neutral-800 bg-neutral-900/60 px-4 py-3 text-left hover:border-sky-500/60 hover:bg-neutral-800/60 disabled:opacity-50"
+      className="flex flex-1 flex-col gap-2 rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 text-left transition hover:border-sky-500/60 hover:bg-neutral-800/60 disabled:opacity-50"
     >
       <span className="text-2xl">{icon}</span>
-      <div>
-        <div className="font-semibold text-neutral-100">{title}</div>
-        <div className="text-xs text-neutral-500">{desc}</div>
-      </div>
+      <div className="font-semibold text-neutral-100">{title}</div>
+      <div className="text-xs leading-relaxed text-neutral-500">{desc}</div>
     </button>
   );
 
   return (
-    <div className="space-y-3">
-      <h2 className="text-lg font-semibold text-neutral-100">Add Service</h2>
-      <p className="text-sm text-neutral-500">อยากเพิ่มยังไง?</p>
-      <Option icon="🔍" title={picking ? 'กำลังสแกน…' : 'Scan Folder'} desc="เลือกโฟลเดอร์ เราเดา command ให้เอง" onClick={onScan} />
-      <Option icon="⚙️" title="Custom Command" desc="กรอกเอง (ชื่อ, โฟลเดอร์, คำสั่ง)" onClick={onCustom} />
-      <Option icon="🔗" title="Existing Process" desc="import process ที่รันอยู่แล้ว" onClick={onProcess} />
-      {error && <p className="text-sm text-red-400">{error}</p>}
-    </div>
-  );
-}
-
-// ---- Step: import จาก process ที่รันอยู่ ----
-
-function ProcessStep({ onBack, onPick }: { onBack: () => void; onPick: (p: ImportableProcess) => void }) {
-  const [procs, setProcs] = useState<ImportableProcess[] | null>(null);
-  const [error, setError] = useState('');
-
-  // โหลด list ครั้งแรก
-  useEffect(() => {
-    api
-      .importableProcesses()
-      .then(setProcs)
-      .catch((err) => setError((err as Error).message));
-  }, []);
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <button type="button" onClick={onBack} className="text-sm text-neutral-500 hover:text-neutral-300">
-          ←
-        </button>
-        <h2 className="text-lg font-semibold text-neutral-100">Existing Process</h2>
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold text-neutral-100">Add Service</h2>
+        <p className="mt-0.5 text-sm text-neutral-500">Choose how you'd like to add your service.</p>
       </div>
-      <p className="text-xs text-neutral-500">
-        เลือก process ที่รันอยู่ (จะยังไม่มี log จนกว่าจะ Stop แล้ว Start ใหม่ผ่าน LocalDeck)
-      </p>
-
-      {!procs && !error && <p className="text-sm text-neutral-500">กำลังโหลด…</p>}
-      {error && <p className="text-sm text-red-400">{error}</p>}
-
-      <div className="max-h-72 space-y-1.5 overflow-auto">
-        {procs?.map((p) => (
-          <button
-            key={p.pid}
-            type="button"
-            onClick={() => onPick(p)}
-            className="flex w-full items-center gap-3 rounded-md border border-neutral-800 bg-neutral-900/60 px-3 py-2 text-left hover:border-sky-500/60"
-          >
-            <span className="font-mono text-xs text-sky-400">:{p.port}</span>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm text-neutral-200">{p.process}</div>
-              <div className="truncate font-mono text-[10px] text-neutral-600">{p.cwd || p.commandLine}</div>
-            </div>
-            <span className="text-xs text-neutral-600">pid {p.pid}</span>
-          </button>
-        ))}
-        {procs?.length === 0 && <p className="text-sm text-neutral-500">ไม่มี process ที่ import ได้</p>}
+      <div className="flex gap-3">
+        <Card
+          icon="📁"
+          title={picking ? 'Scanning…' : 'Import Project'}
+          desc="Import an existing project and configure it automatically."
+          onClick={onScan}
+        />
+        <Card
+          icon="⚙️"
+          title="Manual Setup"
+          desc="Add a custom service with your own startup command."
+          onClick={onCustom}
+        />
       </div>
+      {error && <p className="text-sm text-red-400">{error}</p>}
     </div>
   );
 }

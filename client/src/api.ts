@@ -1,4 +1,4 @@
-import type { ImportableProcess, LogEntry, PortInfo, ScannedProject, ServiceDef, ServiceView } from './types';
+import type { LogEntry, PortInfo, ScannedProject, ServiceDef, ServiceView } from './types';
 
 async function req<T = unknown>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, init);
@@ -52,7 +52,6 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ services }),
     }),
-  importableProcesses: () => req<ImportableProcess[]>('/processes/importable'),
   bulkAction: (ids: string[], action: 'start' | 'stop' | 'restart') =>
     req<{ ok: boolean; errors: { id: string; error: string }[] }>('/services/bulk-action', {
       method: 'POST',

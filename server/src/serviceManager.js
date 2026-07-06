@@ -36,7 +36,7 @@ export class ServiceManager extends EventEmitter {
   statusOf(id) {
     const service = this.getService(id);
     const rt = this.runtime.get(id);
-    if (rt?.child) return { status: rt.status, pid: rt.pid };
+    if (rt?.child) return { status: rt.status, pid: rt.pid, phase: rt.status === 'starting' ? rt.phase : undefined };
     if (service?.port && this.scanner.isPortListening(service.port)) {
       return { status: 'external', pid: this.scanner.pidForPort(service.port) };
     }
@@ -50,7 +50,7 @@ export class ServiceManager extends EventEmitter {
 
   // ---- ทะเบียน service ----
 
-  addService({ name, type, group, cwd, command, port, env }) {
+  addService({ name, type, group, cwd, command, port, env, openOnReady }) {
     this._validate({ name, cwd, command, port });
     const service = {
       id: randomUUID(),
@@ -61,6 +61,7 @@ export class ServiceManager extends EventEmitter {
       command: command.trim(),
       port: port ? Number(port) : null,
       env: env ?? {},
+      openOnReady: !!openOnReady,
     };
     this.services.push(service);
     saveServices(this.services);
@@ -75,6 +76,7 @@ export class ServiceManager extends EventEmitter {
     this._validate(next);
     next.port = next.port ? Number(next.port) : null;
     next.group = next.group?.trim() || '';
+    next.openOnReady = !!next.openOnReady;
     this.services = this.services.map((s) => (s.id === id ? next : s));
     saveServices(this.services);
     this.emit('services');
@@ -127,7 +129,9 @@ export class ServiceManager extends EventEmitter {
       windowsHide: true,
     });
 
-    const rt = { child, pid: child.pid, status: service.port ? 'starting' : 'running', exitCode: null, stopping: false };
+    // เข้าโหมด starting เสมอ — ให้ _onScan หา port (ถ้ายังไม่รู้) แล้ว promote เป็น running
+    // phase: sub-detail ของ starting ไว้โชว์ timeline (starting → waiting-port → ready)
+    const rt = { child, pid: child.pid, status: 'starting', phase: 'starting', startedAt: Date.now(), exitCode: null, stopping: false };
     this.runtime.set(id, rt);
 
     const buffer = this._logBuffer(id);
@@ -194,18 +198,54 @@ export class ServiceManager extends EventEmitter {
   _onScan() {
     for (const service of this.services) {
       const rt = this.runtime.get(service.id);
-      if (rt?.child && rt.status === 'starting' && service.port && this.scanner.isPortListening(service.port)) {
-        rt.status = 'running';
+      if (rt?.child && rt.status === 'starting') {
+        this._promoteStarting(service, rt);
       }
       // broadcast เมื่อสถานะ effective เปลี่ยน (ครอบคลุม external ที่โผล่มา/หายไปเอง)
       this._emitStatus(service.id, true);
     }
   }
 
+  // ระหว่าง starting: หา port ที่ process tree เรา listen อยู่ → auto-detect + promote เป็น running
+  _promoteStarting(service, rt) {
+    // ถ้ารู้ port อยู่แล้ว (user กรอกเอง) — รอ port นั้นขึ้น listen
+    if (service.port) {
+      if (this.scanner.isPortListening(service.port)) {
+        rt.status = 'running';
+        rt.phase = 'ready';
+      } else {
+        rt.phase = 'waiting-port';
+      }
+      return;
+    }
+
+    // ยังไม่รู้ port — หา listening port ที่ owner อยู่ใน process tree ของเรา
+    const treePids = new Set(this.scanner.treePids(rt.pid));
+    const owned = this.scanner.ports.find((p) => treePids.has(p.pid));
+    if (owned) {
+      // เจอแล้ว! จำ port ไว้ (persist) แล้ว promote
+      service.port = owned.port;
+      saveServices(this.services);
+      this.emit('services');
+      rt.status = 'running';
+      rt.phase = 'ready';
+      this._emitLog(service.id, this._logBuffer(service.id).pushSystem(`🔌 detected port ${owned.port}`));
+    } else {
+      rt.phase = 'waiting-port';
+      // service ที่ไม่มี web port (เช่น worker/bot) จะไม่มีวันเจอ — หลัง 8 วิ ถือว่า running เลย
+      if (Date.now() - rt.startedAt > 8000) {
+        rt.status = 'running';
+        rt.phase = 'ready';
+      }
+    }
+  }
+
   _emitStatus(id, onlyIfChanged = false) {
     const state = this.statusOf(id);
-    if (onlyIfChanged && this.lastStatus.get(id) === state.status) return;
-    this.lastStatus.set(id, state.status);
+    // dedup ด้วย status + phase (phase เปลี่ยนตอน starting ต้อง broadcast ด้วย)
+    const key = `${state.status}:${state.phase ?? ''}`;
+    if (onlyIfChanged && this.lastStatus.get(id) === key) return;
+    this.lastStatus.set(id, key);
     this.emit('status', { id, ...state });
   }
 

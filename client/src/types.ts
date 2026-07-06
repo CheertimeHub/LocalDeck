@@ -1,5 +1,8 @@
 export type ServiceStatus = 'stopped' | 'starting' | 'running' | 'external' | 'crashed';
 
+// sub-detail ของ starting — ไว้โชว์ timeline ตอนกำลังรัน
+export type StartPhase = 'starting' | 'waiting-port' | 'ready';
+
 export interface ServiceDef {
   id: string;
   name: string;
@@ -9,6 +12,7 @@ export interface ServiceDef {
   command: string;
   port: number | null;
   env: Record<string, string>;
+  openOnReady?: boolean;
 }
 
 export interface ServiceStats {
@@ -19,6 +23,7 @@ export interface ServiceStats {
 
 export interface ServiceView extends ServiceDef {
   status: ServiceStatus;
+  phase?: StartPhase;
   pid?: number;
   exitCode?: number | null;
   stats?: ServiceStats;
@@ -48,19 +53,11 @@ export interface ScannedProject {
   port: number | null;
 }
 
-// process ที่รันอยู่และ listen port (GET /api/processes/importable)
-export interface ImportableProcess {
-  pid: number;
-  port: number;
-  process: string;
-  commandLine: string;
-  cwd: string;
-}
 
 export type ServerMessage =
   | { type: 'init'; services: ServiceView[]; ports: PortInfo[] }
   | { type: 'services'; services: ServiceView[] }
-  | { type: 'status'; id: string; status: ServiceStatus; pid?: number; exitCode?: number | null }
+  | { type: 'status'; id: string; status: ServiceStatus; phase?: StartPhase; pid?: number; exitCode?: number | null }
   | { type: 'stats'; stats: Record<string, ServiceStats> }
   | { type: 'ports'; ports: PortInfo[] }
   | ({ type: 'log'; id: string } & LogEntry);

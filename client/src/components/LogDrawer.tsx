@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { LogEntry, ServiceView } from '../types';
+import type { LogEntry, ServiceView, StartPhase } from '../types';
 import { api } from '../api';
 
 const STREAM_COLOR: Record<LogEntry['stream'], string> = {
@@ -7,6 +7,43 @@ const STREAM_COLOR: Record<LogEntry['stream'], string> = {
   stderr: 'text-red-300',
   system: 'text-sky-400',
 };
+
+// timeline ตอน start — 3 step เรียง: starting → waiting-port → ready
+const PHASE_STEPS: { key: StartPhase; label: string }[] = [
+  { key: 'starting', label: 'Starting' },
+  { key: 'waiting-port', label: 'Waiting for port' },
+  { key: 'ready', label: 'Ready' },
+];
+
+function StartTimeline({ phase }: { phase: StartPhase }) {
+  const activeIdx = PHASE_STEPS.findIndex((s) => s.key === phase);
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      {PHASE_STEPS.map((step, i) => {
+        const done = i < activeIdx;
+        const active = i === activeIdx;
+        return (
+          <div key={step.key} className="flex items-center gap-2">
+            <span className="flex items-center gap-1.5">
+              <span
+                className={
+                  done ? 'text-emerald-400' : active ? 'text-amber-400' : 'text-neutral-600'
+                }
+              >
+                {done ? '●' : active ? '◉' : '○'}
+              </span>
+              <span className={active ? 'text-amber-300' : done ? 'text-neutral-400' : 'text-neutral-600'}>
+                {step.label}
+                {active && step.key !== 'ready' && <span className="animate-pulse">…</span>}
+              </span>
+            </span>
+            {i < PHASE_STEPS.length - 1 && <span className="text-neutral-700">→</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 interface Props {
   service: ServiceView;
@@ -31,9 +68,12 @@ export function LogDrawer({ service, logs, onClear, onClose }: Props) {
   return (
     <div className="fixed inset-x-0 bottom-0 z-30 flex h-[45vh] flex-col border-t border-neutral-800 bg-neutral-950 shadow-2xl">
       <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
-        <div className="flex flex-col text-sm">
-          <span className="font-semibold text-neutral-100">📄 {service.name}</span>
-          <span className="font-mono text-xs text-neutral-500">{service.command}</span>
+        <div className="flex items-center gap-4">
+          <div className="flex flex-col text-sm">
+            <span className="font-semibold text-neutral-100">📄 {service.name}</span>
+            <span className="font-mono text-xs text-neutral-500">{service.command}</span>
+          </div>
+          {service.status === 'starting' && service.phase && <StartTimeline phase={service.phase} />}
         </div>
         <div className="flex items-center gap-2">
           {!stick && (
