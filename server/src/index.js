@@ -1,4 +1,6 @@
 import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import express from 'express';
 import { WebSocketServer } from 'ws';
@@ -6,6 +8,7 @@ import treeKill from 'tree-kill';
 import { PortScanner } from './portScanner.js';
 import { ServiceManager, httpError } from './serviceManager.js';
 import { StatsCollector } from './statsCollector.js';
+import { scanFolder } from './scanner/projectScanner.js';
 
 const PORT = process.env.LOCALDECK_PORT ? Number(process.env.LOCALDECK_PORT) : 4600;
 
@@ -33,6 +36,49 @@ function enrichedPorts() {
     process: scanner.processes.get(p.pid)?.name ?? '',
     service: owner(p.pid, p.port),
   }));
+}
+
+// ---- process ที่ listen port อยู่และยังไม่ถูก import เป็น service (ไว้ให้ "Import Existing Process") ----
+
+// เดา cwd จาก path ที่ฝังใน command line เช่น "C:\Projects\app\node_modules\.bin\..." → C:\Projects\app
+function guessCwd(commandLine) {
+  const matches = commandLine.match(/[A-Za-z]:\\[^"']+/g);
+  if (!matches) return '';
+  for (const raw of matches) {
+    // ตัดที่ node_modules ถ้ามี (path ก่อนหน้ามักเป็น root โปรเจกต์)
+    let candidate = raw.split(/\\node_modules/i)[0];
+    // ถ้าเป็นไฟล์ให้เอา dir แม่
+    try {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) return candidate;
+      const dir = path.dirname(candidate);
+      if (fs.existsSync(dir) && fs.statSync(dir).isDirectory()) return dir;
+    } catch {
+      // path เพี้ยน — ลองตัวถัดไป
+    }
+  }
+  return '';
+}
+
+function importableProcesses() {
+  const imported = new Set(manager.services.map((s) => s.port).filter(Boolean));
+  const seen = new Set();
+  const out = [];
+  for (const p of scanner.ports) {
+    if (imported.has(p.port)) continue; // มี service ผูก port นี้แล้ว
+    if (seen.has(p.pid)) continue; // process เดียว listen หลาย port — เอาแค่ครั้งเดียว
+    const proc = scanner.processes.get(p.pid);
+    const commandLine = proc?.commandLine ?? '';
+    if (!commandLine) continue; // ไม่มี command line ก็ import ไม่ได้ (เช่น system process)
+    seen.add(p.pid);
+    out.push({
+      pid: p.pid,
+      port: p.port,
+      process: proc?.name ?? '',
+      commandLine,
+      cwd: guessCwd(commandLine),
+    });
+  }
+  return out;
 }
 
 // ---- เปิด native folder picker แล้วคืน absolute path ----
@@ -81,6 +127,31 @@ app.get('/api/services', wrap(() => manager.list()));
 app.post('/api/services', wrap((req) => manager.addService(req.body)));
 app.put('/api/services/:id', wrap((req) => manager.updateService(req.params.id, req.body)));
 app.delete('/api/services/:id', wrap((req) => manager.removeService(req.params.id)));
+
+// bulk import (จาก folder scan หรือ existing process) — เพิ่มทีละตัว รวมผลลัพธ์
+app.post('/api/services/import', wrap((req) => {
+  const list = Array.isArray(req.body?.services) ? req.body.services : [];
+  const added = [];
+  const errors = [];
+  for (const input of list) {
+    try {
+      added.push(manager.addService(input));
+    } catch (err) {
+      errors.push({ name: input?.name ?? '?', error: err.message });
+    }
+  }
+  return { added, errors };
+}));
+
+// ค้นหาโปรเจกต์ในโฟลเดอร์ (สำหรับ onboarding / wizard scan)
+app.post('/api/scan/folder', wrap((req) => {
+  const root = req.body?.root;
+  if (!root) throw httpError(400, 'root is required');
+  return { projects: scanFolder(root, { maxDepth: req.body?.maxDepth ?? 2 }) };
+}));
+
+// process ที่รันอยู่และ listen port — ไว้ import เป็น service
+app.get('/api/processes/importable', wrap(() => importableProcesses()));
 
 app.post('/api/services/:id/start', wrap((req) => manager.start(req.params.id)));
 app.post('/api/services/:id/stop', wrap((req) => manager.stop(req.params.id)));

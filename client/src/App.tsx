@@ -6,6 +6,7 @@ import { ServiceCard, type ServiceAction } from './components/ServiceCard';
 import { AddServiceModal } from './components/AddServiceModal';
 import { LogDrawer } from './components/LogDrawer';
 import { PortsPanel } from './components/PortsPanel';
+import { Onboarding } from './components/Onboarding';
 
 const MAX_CLIENT_LOGS = 2000;
 
@@ -130,10 +131,7 @@ export default function App() {
 
       <main className="mx-auto max-w-6xl space-y-10 px-6 py-8">
         {services.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-neutral-800 p-12 text-center text-neutral-500">
-            <p className="text-3xl">🗂️</p>
-            <p className="mt-3">ยังไม่มี service — กด <b className="text-neutral-300">+ Add Service</b> เพื่อลงทะเบียนโปรเจคแรก</p>
-          </div>
+          <Onboarding onImported={() => {}} />
         ) : (
           groupOrder.map((group) => {
             const items = grouped.get(group)!;

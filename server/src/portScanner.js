@@ -22,30 +22,35 @@ function parseNetstat(output) {
   return [...byPort.values()].sort((a, b) => a.port - b.port);
 }
 
-// อ่านรายการ process ทั้งเครื่องรอบเดียว: ได้ชื่อ, parent PID (ไว้หา tree), RAM, CPU time
+// อ่านรายการ process ทั้งเครื่องรอบเดียว: ได้ชื่อ, parent PID (ไว้หา tree), RAM, CPU time, command line
 // ใช้ CIM ผ่าน PowerShell แทน wmic เพราะ Windows 11 รุ่นใหม่ถอด wmic ออกแล้ว
+// ใช้ ConvertTo-Json (ไม่ใช่ CSV) เพราะ CommandLine มี comma/quote ที่ทำให้ CSV split พัง
 const CIM_SCRIPT =
   'Get-CimInstance Win32_Process | ' +
-  'Select-Object ProcessId,ParentProcessId,Name,WorkingSetSize,UserModeTime,KernelModeTime | ' +
-  'ConvertTo-Csv -NoTypeInformation';
+  'Select-Object ProcessId,ParentProcessId,Name,WorkingSetSize,UserModeTime,KernelModeTime,CommandLine | ' +
+  'ConvertTo-Json -Compress -Depth 2';
 
-function parseProcessCsv(output) {
-  const lines = output.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  if (lines.length < 2) return new Map();
-  const header = lines[0].replace(/^"|"$/g, '').split('","');
-  const idx = Object.fromEntries(header.map((h, i) => [h, i]));
+function parseProcessJson(output) {
   const processes = new Map();
-  for (let i = 1; i < lines.length; i++) {
-    const cols = lines[i].replace(/^"|"$/g, '').split('","');
-    const pid = Number(cols[idx.ProcessId]);
+  let rows;
+  try {
+    rows = JSON.parse(output);
+  } catch {
+    return processes;
+  }
+  // PowerShell คืน object เดี่ยว (ไม่ใช่ array) ถ้ามีแค่ 1 element
+  if (!Array.isArray(rows)) rows = rows ? [rows] : [];
+  for (const row of rows) {
+    const pid = Number(row.ProcessId);
     if (!Number.isFinite(pid)) continue;
     processes.set(pid, {
       pid,
-      ppid: Number(cols[idx.ParentProcessId]) || 0,
-      name: cols[idx.Name] ?? '',
-      memory: Number(cols[idx.WorkingSetSize]) || 0,
+      ppid: Number(row.ParentProcessId) || 0,
+      name: row.Name ?? '',
+      memory: Number(row.WorkingSetSize) || 0,
       // หน่วย 100 นาโนวินาที → มิลลิวินาที
-      cpuMs: (Number(cols[idx.UserModeTime]) + Number(cols[idx.KernelModeTime])) / 10000 || 0,
+      cpuMs: (Number(row.UserModeTime) + Number(row.KernelModeTime)) / 10000 || 0,
+      commandLine: row.CommandLine ?? '',
     });
   }
   return processes;
@@ -87,7 +92,7 @@ export class PortScanner extends EventEmitter {
         run('powershell', ['-NoProfile', '-NonInteractive', '-Command', CIM_SCRIPT]),
       ]);
       this.ports = parseNetstat(netstatOut);
-      this.processes = parseProcessCsv(cimOut);
+      this.processes = parseProcessJson(cimOut);
       this.scannedAt = Date.now();
       this.emit('scan', { ports: this.ports, processes: this.processes, at: this.scannedAt });
     } catch (err) {

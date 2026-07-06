@@ -38,6 +38,25 @@ export interface LogEntry {
   line: string;
 }
 
+// ผลจากการสแกนโฟลเดอร์ (POST /api/scan/folder)
+export interface ScannedProject {
+  name: string;
+  cwd: string;
+  type: string;
+  command: string;
+  icon: string;
+  port: number | null;
+}
+
+// process ที่รันอยู่และ listen port (GET /api/processes/importable)
+export interface ImportableProcess {
+  pid: number;
+  port: number;
+  process: string;
+  commandLine: string;
+  cwd: string;
+}
+
 export type ServerMessage =
   | { type: 'init'; services: ServiceView[]; ports: PortInfo[] }
   | { type: 'services'; services: ServiceView[] }
