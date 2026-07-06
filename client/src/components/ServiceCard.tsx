@@ -19,6 +19,7 @@ interface Props {
   onEdit: () => void;
   onDelete: () => void;
   onOpenFolder: (app?: 'code') => void;
+  onTogglePin: () => void;
 }
 
 function IconButton({
@@ -47,7 +48,7 @@ function IconButton({
   );
 }
 
-export function ServiceCard({ service, busy, onAction, onLogs, onEdit, onDelete, onOpenFolder }: Props) {
+export function ServiceCard({ service, busy, onAction, onLogs, onEdit, onDelete, onOpenFolder, onTogglePin }: Props) {
   const style = STATUS_STYLE[service.status];
   const isUp = service.status === 'running' || service.status === 'starting' || service.status === 'external';
   const canStart = service.status === 'stopped' || service.status === 'crashed';
@@ -63,6 +64,13 @@ export function ServiceCard({ service, busy, onAction, onLogs, onEdit, onDelete,
           <p className="mt-0.5 truncate text-xs text-neutral-500">{service.type || service.command}</p>
         </div>
         <div className="flex gap-1">
+          <IconButton
+            title={service.pinned ? 'Unpin' : 'Pin to top'}
+            onClick={onTogglePin}
+            className={`h-7 w-7 border-transparent bg-transparent ${service.pinned ? 'text-amber-400' : 'text-neutral-600 hover:text-amber-400'}`}
+          >
+            {service.pinned ? '★' : '☆'}
+          </IconButton>
           <IconButton title="Edit" onClick={onEdit} className="h-7 w-7 border-transparent bg-transparent">✎</IconButton>
           <IconButton title="Delete" onClick={onDelete} className="h-7 w-7 border-transparent bg-transparent hover:text-red-400">🗑</IconButton>
         </div>

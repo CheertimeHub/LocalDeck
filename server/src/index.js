@@ -153,7 +153,7 @@ app.post('/api/scan/folder', wrap((req) => {
 // process ที่รันอยู่และ listen port — ไว้ import เป็น service
 app.get('/api/processes/importable', wrap(() => importableProcesses()));
 
-app.post('/api/services/:id/start', wrap((req) => manager.start(req.params.id)));
+app.post('/api/services/:id/start', wrap((req) => manager.startWithDeps(req.params.id)));
 app.post('/api/services/:id/stop', wrap((req) => manager.stop(req.params.id)));
 app.post('/api/services/:id/restart', wrap((req) => manager.restart(req.params.id)));
 

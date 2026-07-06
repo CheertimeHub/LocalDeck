@@ -4,7 +4,9 @@ import { api } from '../api';
 
 interface Props {
   edit: ServiceView | null;
+  prefill?: Partial<ServiceView>;
   groups: string[];
+  allServices: ServiceView[];
   onClose: () => void;
 }
 
@@ -13,17 +15,19 @@ const FIELD =
 
 type Step = 'choose' | 'form';
 
-export function AddServiceModal({ edit, groups, onClose }: Props) {
-  // edit → เข้าฟอร์มเลย; add ใหม่ → เริ่มที่เมนูเลือกวิธี
-  const [step, setStep] = useState<Step>(edit ? 'form' : 'choose');
+export function AddServiceModal({ edit, prefill, groups, allServices, onClose }: Props) {
+  // edit หรือ prefill (จาก drag&drop) → เข้าฟอร์มเลย; add เปล่า → เริ่มที่เมนูเลือกวิธี
+  const init = edit ?? prefill;
+  const [step, setStep] = useState<Step>(edit || prefill ? 'form' : 'choose');
   const [form, setForm] = useState({
-    name: edit?.name ?? '',
-    type: edit?.type ?? '',
-    group: edit?.group ?? '',
-    cwd: edit?.cwd ?? '',
-    command: edit?.command ?? '',
-    port: edit?.port ? String(edit.port) : '',
-    openOnReady: edit?.openOnReady ?? false,
+    name: init?.name ?? '',
+    type: init?.type ?? '',
+    group: init?.group ?? '',
+    cwd: init?.cwd ?? '',
+    command: init?.command ?? '',
+    port: init?.port ? String(init.port) : '',
+    openOnReady: init?.openOnReady ?? false,
+    dependsOn: init?.dependsOn ?? [],
   });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -161,6 +165,36 @@ export function AddServiceModal({ edit, groups, onClose }: Props) {
               />
               🌐 เปิด browser อัตโนมัติเมื่อ service พร้อม
             </label>
+
+            {/* depends-on: โชว์เฉพาะตอน edit และมี service อื่นให้เลือก — start ตัวพวกนี้ก่อน */}
+            {edit && allServices.some((s) => s.id !== edit.id) && (
+              <div className="space-y-1">
+                <span className="text-xs text-neutral-400">เริ่มก่อน (dependencies) — start ตัวพวกนี้ให้พร้อมก่อน</span>
+                <div className="max-h-28 space-y-1 overflow-auto rounded-md border border-neutral-800 p-2">
+                  {allServices
+                    .filter((s) => s.id !== edit.id)
+                    .map((s) => (
+                      <label key={s.id} className="flex cursor-pointer items-center gap-2 text-sm text-neutral-300">
+                        <input
+                          type="checkbox"
+                          checked={form.dependsOn.includes(s.id)}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              dependsOn: e.target.checked
+                                ? [...f.dependsOn, s.id]
+                                : f.dependsOn.filter((d) => d !== s.id),
+                            }))
+                          }
+                          className="h-4 w-4 accent-sky-500"
+                        />
+                        {s.group && <span className="text-xs text-neutral-600">{s.group} /</span>}
+                        {s.name}
+                      </label>
+                    ))}
+                </div>
+              </div>
+            )}
 
             {error && <p className="text-sm text-red-400">{error}</p>}
 

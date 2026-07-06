@@ -13,6 +13,8 @@ export interface ServiceDef {
   port: number | null;
   env: Record<string, string>;
   openOnReady?: boolean;
+  pinned?: boolean;
+  dependsOn?: string[];
 }
 
 export interface ServiceStats {

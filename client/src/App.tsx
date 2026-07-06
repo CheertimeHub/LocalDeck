@@ -15,9 +15,12 @@ export default function App() {
   const [ports, setPorts] = useState<PortInfo[]>([]);
   const [logServiceId, setLogServiceId] = useState<string | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [modal, setModal] = useState<{ open: boolean; edit: ServiceView | null }>({ open: false, edit: null });
+  const [modal, setModal] = useState<{ open: boolean; edit: ServiceView | null; prefill?: Partial<ServiceView> }>({ open: false, edit: null });
   const [busy, setBusy] = useState<Record<string, string>>({});
+  const [query, setQuery] = useState('');
+  const [dragging, setDragging] = useState(false);
   const logIdRef = useRef<string | null>(null);
+  const dragDepth = useRef(0); // นับ dragenter/leave กัน overlay กระพริบตอนลากผ่าน element ลูก
   const openedRef = useRef<Set<string>>(new Set()); // service ที่ auto-open browser ไปแล้ว (กันเปิดซ้ำ)
 
   const handleMessage = useCallback((msg: ServerMessage) => {
@@ -95,6 +98,43 @@ export default function App() {
     }
   };
 
+  // ปัก/ถอนหมุด — ส่ง patch แค่ pinned, server merge กับ service เดิม (state อัปเดตผ่าน services message)
+  const togglePin = async (service: ServiceView) => {
+    try {
+      await api.updateService(service.id, { ...service, pinned: !service.pinned });
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
+
+  // ลากโฟลเดอร์เข้ามา → หา path → scan → เปิด modal เติมให้ (ลาก package.json ก็เอา dir แม่)
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepth.current = 0;
+    setDragging(false);
+    const file = e.dataTransfer.files[0] as (File & { path?: string }) | undefined;
+    // browser ปกติไม่ให้ absolute path ของ drop — ถ้าไม่มี path ให้เปิด folder picker แทน
+    let dropped = file?.path ?? '';
+    if (dropped && /\.[a-z]+$/i.test(dropped)) dropped = dropped.replace(/[\\/][^\\/]+$/, ''); // ไฟล์ → dir แม่
+    try {
+      if (!dropped) {
+        const picked = await api.pickFolder();
+        dropped = picked.cwd ?? '';
+        if (!dropped) return;
+      }
+      const { projects } = await api.scanFolder(dropped);
+      const p = projects[0];
+      if (p) {
+        // เปิด modal (add ใหม่) พร้อม prefill ข้อมูลโปรเจกต์ที่ scan เจอ ให้ user ยืนยัน/แก้ก่อน add
+        setModal({ open: true, edit: null, prefill: { name: p.name, type: p.type, cwd: p.cwd, command: p.command } });
+      } else {
+        alert('ไม่เจอโปรเจกต์ในโฟลเดอร์ที่ลากมา');
+      }
+    } catch (err) {
+      alert((err as Error).message);
+    }
+  };
+
   const openLogs = async (id: string) => {
     logIdRef.current = id;
     setLogServiceId(id);
@@ -120,9 +160,17 @@ export default function App() {
   const running = services.filter((s) => s.status === 'running' || s.status === 'external').length;
   const logService = services.find((s) => s.id === logServiceId) ?? null;
 
-  // จัดกลุ่มการ์ดตาม group — service ที่ไม่มี group ไปรวมกลุ่ม '' (แสดงท้ายสุด ไม่มีหัวข้อ)
+  // filter ตามช่องค้นหา (name / group / type)
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? services.filter((s) => `${s.name} ${s.group} ${s.type}`.toLowerCase().includes(q))
+    : services;
+
+  // pinned ขึ้น section ⭐ Favorites (ไม่ซ้ำในกลุ่ม); ที่เหลือจัดกลุ่มตาม group
+  const favorites = filtered.filter((s) => s.pinned);
   const grouped = new Map<string, ServiceView[]>();
-  for (const s of services) {
+  for (const s of filtered) {
+    if (s.pinned) continue;
     const key = s.group || '';
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key)!.push(s);
@@ -131,8 +179,46 @@ export default function App() {
   // เรียง: group ที่ตั้งชื่อไว้ (เรียงตามตัวอักษร) ก่อน แล้วค่อยพวกไม่มี group
   const groupOrder = [...groupNames, ...(grouped.has('') ? [''] : [])];
 
+  const renderCard = (service: ServiceView) => (
+    <ServiceCard
+      key={service.id}
+      service={service}
+      busy={busy[service.id] ?? null}
+      onAction={(action) => doAction(service.id, action)}
+      onLogs={() => openLogs(service.id)}
+      onEdit={() => setModal({ open: true, edit: service })}
+      onDelete={() => deleteService(service)}
+      onOpenFolder={(app) => api.openFolder(service.id, app).catch((err) => alert(err.message))}
+      onTogglePin={() => togglePin(service)}
+    />
+  );
+
   return (
-    <div className="min-h-screen text-neutral-200" style={{ paddingBottom: logService ? '48vh' : 0 }}>
+    <div
+      className="min-h-screen text-neutral-200"
+      style={{ paddingBottom: logService ? '48vh' : 0 }}
+      onDragEnter={(e) => {
+        if (e.dataTransfer.types.includes('Files')) {
+          dragDepth.current++;
+          setDragging(true);
+        }
+      }}
+      onDragOver={(e) => e.dataTransfer.types.includes('Files') && e.preventDefault()}
+      onDragLeave={() => {
+        dragDepth.current--;
+        if (dragDepth.current <= 0) setDragging(false);
+      }}
+      onDrop={handleDrop}
+    >
+      {dragging && (
+        <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-sky-950/40 backdrop-blur-sm">
+          <div className="rounded-2xl border-2 border-dashed border-sky-400 bg-neutral-900/90 px-10 py-8 text-center">
+            <p className="text-4xl">📁</p>
+            <p className="mt-2 font-semibold text-sky-300">วางโฟลเดอร์โปรเจกต์ที่นี่</p>
+            <p className="mt-1 text-xs text-neutral-400">เราจะสแกนแล้วเดา command ให้เอง</p>
+          </div>
+        </div>
+      )}
       <header className="sticky top-0 z-20 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur">
         <div className="flex items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
@@ -143,6 +229,14 @@ export default function App() {
             />
           </div>
           <div className="flex items-center gap-4">
+            {services.length > 0 && (
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="🔍 Search…"
+                className="w-48 rounded-md border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 placeholder-neutral-600 outline-none focus:border-sky-500"
+              />
+            )}
             <span className="text-sm text-neutral-500">
               <span className="text-emerald-400">{running} running</span>
               {' · '}
@@ -163,7 +257,22 @@ export default function App() {
         {services.length === 0 ? (
           <Onboarding onImported={() => {}} />
         ) : (
-          groupOrder.map((group) => {
+          <>
+            {q && filtered.length === 0 && (
+              <p className="text-center text-sm text-neutral-500">ไม่เจอ service ที่ตรงกับ "{query}"</p>
+            )}
+            {favorites.length > 0 && (
+              <section className="space-y-3">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-400">
+                  <span>⭐ Favorites</span>
+                  <span className="text-xs font-normal text-neutral-600">{favorites.length}</span>
+                </h2>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                  {favorites.map(renderCard)}
+                </div>
+              </section>
+            )}
+            {groupOrder.map((group) => {
             const items = grouped.get(group)!;
             const upCount = items.filter((s) => s.status === 'running' || s.status === 'external').length;
             // ตัวที่ start ได้ (stopped/crashed) และตัวที่ stop ได้ (กำลังทำงาน)
@@ -200,29 +309,19 @@ export default function App() {
                   </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-                  {items.map((service) => (
-                    <ServiceCard
-                      key={service.id}
-                      service={service}
-                      busy={busy[service.id] ?? null}
-                      onAction={(action) => doAction(service.id, action)}
-                      onLogs={() => openLogs(service.id)}
-                      onEdit={() => setModal({ open: true, edit: service })}
-                      onDelete={() => deleteService(service)}
-                      onOpenFolder={(app) => api.openFolder(service.id, app).catch((err) => alert(err.message))}
-                    />
-                  ))}
+                  {items.map(renderCard)}
                 </div>
               </section>
             );
-          })
+            })}
+          </>
         )}
 
         <PortsPanel ports={ports} />
       </main>
 
       {logService && <LogDrawer service={logService} logs={logs} onClear={() => setLogs([])} onClose={closeLogs} />}
-      {modal.open && <AddServiceModal edit={modal.edit} groups={groupNames} onClose={() => setModal({ open: false, edit: null })} />}
+      {modal.open && <AddServiceModal edit={modal.edit} prefill={modal.prefill} groups={groupNames} allServices={services} onClose={() => setModal({ open: false, edit: null })} />}
     </div>
   );
 }

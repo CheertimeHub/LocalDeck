@@ -50,7 +50,7 @@ export class ServiceManager extends EventEmitter {
 
   // ---- ทะเบียน service ----
 
-  addService({ name, type, group, cwd, command, port, env, openOnReady }) {
+  addService({ name, type, group, cwd, command, port, env, openOnReady, pinned, dependsOn }) {
     this._validate({ name, cwd, command, port });
     const service = {
       id: randomUUID(),
@@ -62,6 +62,8 @@ export class ServiceManager extends EventEmitter {
       port: port ? Number(port) : null,
       env: env ?? {},
       openOnReady: !!openOnReady,
+      pinned: !!pinned,
+      dependsOn: Array.isArray(dependsOn) ? dependsOn : [],
     };
     this.services.push(service);
     saveServices(this.services);
@@ -77,6 +79,8 @@ export class ServiceManager extends EventEmitter {
     next.port = next.port ? Number(next.port) : null;
     next.group = next.group?.trim() || '';
     next.openOnReady = !!next.openOnReady;
+    next.pinned = !!next.pinned;
+    next.dependsOn = Array.isArray(next.dependsOn) ? next.dependsOn : [];
     this.services = this.services.map((s) => (s.id === id ? next : s));
     saveServices(this.services);
     this.emit('services');
@@ -106,6 +110,38 @@ export class ServiceManager extends EventEmitter {
   }
 
   // ---- ควบคุม process ----
+
+  // start service พร้อม dependency: start ตัวที่มัน dependsOn ก่อน (recursive) รอ ready แล้วค่อย start ตัวเอง
+  // (Redis → Backend → Frontend). กัน cycle ด้วย visited set
+  async startWithDeps(id, visited = new Set()) {
+    if (visited.has(id)) return; // กัน circular dependency
+    visited.add(id);
+    const service = this.getService(id);
+    if (!service) throw httpError(404, 'service not found');
+
+    // start dependencies ก่อน แล้วรอแต่ละตัว ready (ข้ามตัวที่รันอยู่แล้ว)
+    for (const depId of service.dependsOn ?? []) {
+      const depStatus = this.statusOf(depId).status;
+      if (depStatus === 'stopped' || depStatus === 'crashed') {
+        await this.startWithDeps(depId, visited);
+      }
+      await this._waitReady(depId, 30000);
+    }
+
+    const { status } = this.statusOf(id);
+    if (status === 'stopped' || status === 'crashed') await this.start(id);
+  }
+
+  // รอจนกว่า service จะ running/external (หรือ timeout) — ใช้ระหว่าง start dependency chain
+  async _waitReady(id, timeoutMs) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const { status } = this.statusOf(id);
+      if (status === 'running' || status === 'external') return;
+      if (status === 'stopped' || status === 'crashed') return; // ไม่รอ ตัวที่ตายแล้ว
+      await delay(500);
+    }
+  }
 
   async start(id) {
     const service = this.getService(id);
