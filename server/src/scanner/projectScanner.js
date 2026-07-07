@@ -48,9 +48,22 @@ function detectProject(dir, fileNames) {
 
   if (has('package.json')) return detectNode(dir, name);
   if (has('build.gradle') || has('build.gradle.kts')) {
-    return make(dir, name, 'Spring / Gradle', './gradlew bootRun', '🍃');
+    // Windows: ใช้ gradlew.bat ถ้ามี wrapper ไม่งั้น gradle ที่ติดตั้ง (./gradlew ใช้ไม่ได้บน Windows)
+    const cmd = has('gradlew.bat') || has('gradlew') ? 'gradlew.bat bootRun' : 'gradle bootRun';
+    return make(dir, name, 'Java Spring Boot', cmd, '🍃');
   }
-  if (has('pom.xml')) return make(dir, name, 'Java / Maven', './mvnw spring-boot:run', '☕');
+  if (has('pom.xml')) {
+    // Windows: mvnw.cmd ถ้ามี wrapper ไม่งั้น mvn ที่ติดตั้ง — เดา spring-boot ถ้า pom มี plugin
+    const wrapper = has('mvnw.cmd') || has('mvnw') ? 'mvnw.cmd' : 'mvn';
+    const spring = pomHasSpringBoot(dir);
+    return make(
+      dir,
+      name,
+      spring ? 'Java Spring Boot' : 'Java / Maven',
+      spring ? `${wrapper} spring-boot:run` : `${wrapper} compile exec:java`,
+      spring ? '🍃' : '☕',
+    );
+  }
   if (has('manage.py')) return make(dir, name, 'Django', 'python manage.py runserver', '🐍');
   if (has('pyproject.toml')) return detectPython(dir, name, true);
   if (has('requirements.txt')) return detectPython(dir, name, false);
@@ -101,6 +114,16 @@ function detectPython(dir, name, hasPyproject) {
     : hasPyproject ? 'python main.py'
     : 'python main.py';
   return make(dir, name, 'Python', command, '🐍');
+}
+
+// เดาว่า pom.xml เป็นโปรเจกต์ Spring Boot ไหม (มี spring-boot-maven-plugin หรือ starter)
+function pomHasSpringBoot(dir) {
+  try {
+    const pom = fs.readFileSync(path.join(dir, 'pom.xml'), 'utf8');
+    return /spring-boot/i.test(pom);
+  } catch {
+    return false;
+  }
 }
 
 function make(dir, name, type, command, icon) {

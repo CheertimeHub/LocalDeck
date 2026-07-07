@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ScannedProject } from '../types';
 import { api } from '../api';
+import { Hand, Search, Inbox, PartyPopper, ArrowLeft } from '../ui/icons';
 
 interface Props {
   onImported: () => void;
@@ -65,8 +66,8 @@ export function Onboarding({ onImported }: Props) {
   // ยังไม่ได้ scan — จอต้อนรับ
   if (!projects) {
     return (
-      <div className="mx-auto max-w-lg rounded-2xl border border-neutral-800 bg-neutral-900/60 p-10 text-center">
-        <p className="text-5xl">👋</p>
+      <div className="mx-auto max-w-lg rounded-xl border border-neutral-800 bg-neutral-900/60 p-10 text-center">
+        <Hand size={40} className="mx-auto text-amber-400" />
         <h2 className="mt-4 text-xl font-bold text-neutral-100">Welcome to LocalDeck</h2>
         <p className="mt-2 text-sm text-neutral-400">
           ให้เราค้นหาโปรเจกต์ในเครื่องให้อัตโนมัติ — เลือกโฟลเดอร์หลัก (เช่น <span className="font-mono text-neutral-300">C:\Projects</span>) แล้วเราจัดการที่เหลือเอง
@@ -75,9 +76,9 @@ export function Onboarding({ onImported }: Props) {
           type="button"
           onClick={scan}
           disabled={scanning}
-          className="mt-6 rounded-lg bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
+          className="mx-auto mt-6 inline-flex items-center gap-2 rounded-md bg-sky-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-sky-500 disabled:opacity-50"
         >
-          {scanning ? 'กำลังสแกน…' : '🔍 Scan My Computer'}
+          <Search size={16} /> {scanning ? 'กำลังสแกน…' : 'Scan My Computer'}
         </button>
         {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
       </div>
@@ -87,11 +88,11 @@ export function Onboarding({ onImported }: Props) {
   // scan แล้วไม่เจออะไร
   if (projects.length === 0) {
     return (
-      <div className="mx-auto max-w-lg rounded-2xl border border-dashed border-neutral-800 p-10 text-center text-neutral-400">
-        <p className="text-4xl">🕳️</p>
+      <div className="mx-auto max-w-lg rounded-xl border border-dashed border-neutral-800 p-10 text-center text-neutral-400">
+        <Inbox size={36} className="mx-auto text-neutral-600" />
         <p className="mt-3">ไม่เจอโปรเจกต์ในโฟลเดอร์นี้</p>
-        <button type="button" onClick={() => setProjects(null)} className="mt-4 text-sm text-sky-400 hover:underline">
-          ← ลองโฟลเดอร์อื่น
+        <button type="button" onClick={() => setProjects(null)} className="mx-auto mt-4 inline-flex items-center gap-1 text-sm text-sky-400 hover:underline">
+          <ArrowLeft size={13} /> ลองโฟลเดอร์อื่น
         </button>
       </div>
     );
@@ -101,7 +102,9 @@ export function Onboarding({ onImported }: Props) {
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="text-center">
-        <h2 className="text-lg font-bold text-neutral-100">🎉 เจอ {projects.length} โปรเจกต์</h2>
+        <h2 className="flex items-center justify-center gap-2 text-lg font-bold text-neutral-100">
+          <PartyPopper size={18} className="text-emerald-400" /> เจอ {projects.length} โปรเจกต์
+        </h2>
         <p className="mt-1 text-sm text-neutral-500">ติ๊กเลือกตัวที่อยากเพิ่ม แล้วกด Import</p>
       </div>
 
@@ -136,8 +139,8 @@ export function Onboarding({ onImported }: Props) {
           placeholder="Project / Group (ไม่บังคับ)"
           className="flex-1 rounded-md border border-neutral-700 bg-neutral-900 px-3 py-2 text-sm text-neutral-100 placeholder-neutral-600 outline-none focus:border-sky-500"
         />
-        <button type="button" onClick={() => setProjects(null)} className="text-sm text-neutral-400 hover:text-neutral-200">
-          ← ยกเลิก
+        <button type="button" onClick={() => setProjects(null)} className="inline-flex items-center gap-1 text-sm text-neutral-400 hover:text-neutral-200">
+          <ArrowLeft size={13} /> ยกเลิก
         </button>
         <button
           type="button"

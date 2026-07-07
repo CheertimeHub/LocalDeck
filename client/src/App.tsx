@@ -7,6 +7,8 @@ import { AddServiceModal } from './components/AddServiceModal';
 import { LogDrawer } from './components/LogDrawer';
 import { PortsPanel } from './components/PortsPanel';
 import { Onboarding } from './components/Onboarding';
+import { Input, StatusDot } from './ui';
+import { Terminal, Search, Plus, Star, Folder, Play, Square } from './ui/icons';
 
 const MAX_CLIENT_LOGS = 2000;
 
@@ -38,7 +40,7 @@ export default function App() {
         setServices((prev) =>
           prev.map((s) => {
             if (s.id !== msg.id) return s;
-            const next = { ...s, status: msg.status, phase: msg.phase, pid: msg.pid, exitCode: msg.exitCode };
+            const next = { ...s, status: msg.status, phase: msg.phase, pid: msg.pid, exitCode: msg.exitCode, port: msg.port ?? s.port };
             // auto-open browser: พอ running + ติ๊กไว้ + มี port + ยังไม่เคยเปิดในรอบนี้
             // (port ถูก auto-detect แล้ว persist ผ่าน services message ก่อนหน้า)
             if (next.status === 'running' && next.openOnReady && next.port && !openedRef.current.has(s.id)) {
@@ -212,32 +214,36 @@ export default function App() {
     >
       {dragging && (
         <div className="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-sky-950/40 backdrop-blur-sm">
-          <div className="rounded-2xl border-2 border-dashed border-sky-400 bg-neutral-900/90 px-10 py-8 text-center">
-            <p className="text-4xl">📁</p>
-            <p className="mt-2 font-semibold text-sky-300">วางโฟลเดอร์โปรเจกต์ที่นี่</p>
+          <div className="rounded-xl border-2 border-dashed border-sky-400 bg-neutral-900/90 px-10 py-8 text-center">
+            <Folder size={36} className="mx-auto text-sky-400" />
+            <p className="mt-3 font-semibold text-sky-300">วางโฟลเดอร์โปรเจกต์ที่นี่</p>
             <p className="mt-1 text-xs text-neutral-400">เราจะสแกนแล้วเดา command ให้เอง</p>
           </div>
         </div>
       )}
       <header className="sticky top-0 z-20 border-b border-neutral-800 bg-neutral-950/90 backdrop-blur">
         <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-3">
-            <h1 className="text-lg font-bold text-neutral-100">🚀 LocalDeck</h1>
-            <span
-              className={`h-2 w-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-red-500 animate-pulse'}`}
-              title={connected ? 'connected' : 'reconnecting…'}
+          <div className="flex items-center gap-2.5">
+            <Terminal size={20} className="text-sky-400" />
+            <h1 className="font-mono text-lg font-black text-neutral-100">LocalDeck</h1>
+            <StatusDot
+              className={connected ? 'bg-emerald-400' : 'bg-red-500'}
+              pulse={!connected}
             />
           </div>
           <div className="flex items-center gap-4">
             {services.length > 0 && (
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="🔍 Search…"
-                className="w-48 rounded-md border border-neutral-800 bg-neutral-900 px-3 py-1.5 text-sm text-neutral-100 placeholder-neutral-600 outline-none focus:border-sky-500"
-              />
+              <div className="relative">
+                <Search size={14} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-600" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search services, ports…"
+                  className="w-56 pl-8"
+                />
+              </div>
             )}
-            <span className="text-sm text-neutral-500">
+            <span className="font-mono text-sm text-neutral-500">
               <span className="text-emerald-400">{running} running</span>
               {' · '}
               {services.length - running} stopped
@@ -245,9 +251,9 @@ export default function App() {
             <button
               type="button"
               onClick={() => setModal({ open: true, edit: null })}
-              className="rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500"
+              className="inline-flex items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-sky-500"
             >
-              + Add Service
+              <Plus size={16} /> New
             </button>
           </div>
         </div>
@@ -263,11 +269,11 @@ export default function App() {
             )}
             {favorites.length > 0 && (
               <section className="space-y-3">
-                <h2 className="flex items-center gap-2 text-sm font-semibold text-amber-400">
-                  <span>⭐ Favorites</span>
-                  <span className="text-xs font-normal text-neutral-600">{favorites.length}</span>
+                <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-amber-400">
+                  <Star size={13} className="fill-amber-400" /> Favorites
+                  <span className="font-normal normal-case tracking-normal text-neutral-600">{favorites.length}</span>
                 </h2>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <div className="grid grid-flow-row-dense items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {favorites.map(renderCard)}
                 </div>
               </section>
@@ -282,9 +288,10 @@ export default function App() {
             return (
               <section key={group || '__ungrouped__'} className="group/section space-y-3">
                 <div className="flex items-center gap-2">
-                  <h2 className={`flex items-center gap-2 text-sm font-semibold ${group ? 'text-neutral-300' : 'text-neutral-500'}`}>
-                    <span>{group ? `📁 ${label}` : label}</span>
-                    <span className="text-xs font-normal text-neutral-600">{upCount}/{items.length} up</span>
+                  <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                    {group && <Folder size={13} className="text-neutral-600" />}
+                    {label}
+                    <span className="font-normal normal-case tracking-normal text-neutral-600">{upCount}/{items.length} up</span>
                   </h2>
                   {/* ปุ่มทั้งกลุ่ม — โผล่ตอน hover เท่านั้น ไม่ให้ UI รก */}
                   <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover/section:opacity-100">
@@ -292,23 +299,23 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => groupAction(startable, 'start')}
-                        className="rounded px-2 py-0.5 text-xs text-emerald-400 hover:bg-emerald-500/10"
+                        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-emerald-400 hover:bg-emerald-500/10"
                       >
-                        ▶ Start all
+                        <Play size={11} /> Start all
                       </button>
                     )}
                     {stoppable.length > 0 && (
                       <button
                         type="button"
                         onClick={() => groupAction(stoppable, 'stop')}
-                        className="rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10"
+                        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10"
                       >
-                        ■ Stop all
+                        <Square size={10} /> Stop all
                       </button>
                     )}
                   </div>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                <div className="grid grid-flow-row-dense items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
                   {items.map(renderCard)}
                 </div>
               </section>

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ServiceView } from '../types';
 import { api } from '../api';
+import { ArrowLeft, Globe, FolderSearch, Settings2 } from '../ui/icons';
 
 interface Props {
   edit: ServiceView | null;
@@ -100,8 +101,8 @@ export function AddServiceModal({ edit, prefill, groups, allServices, onClose }:
           <form onSubmit={submit} className="space-y-4">
             <div className="flex items-center gap-2">
               {!edit && (
-                <button type="button" onClick={() => setStep('choose')} className="text-sm text-neutral-500 hover:text-neutral-300">
-                  ←
+                <button type="button" onClick={() => setStep('choose')} className="text-neutral-500 hover:text-neutral-300" aria-label="Back">
+                  <ArrowLeft size={16} />
                 </button>
               )}
               <h2 className="text-lg font-semibold text-neutral-100">{edit ? 'Edit Service' : 'Add Service'}</h2>
@@ -163,7 +164,7 @@ export function AddServiceModal({ edit, prefill, groups, allServices, onClose }:
                 onChange={(e) => setForm((f) => ({ ...f, openOnReady: e.target.checked }))}
                 className="h-4 w-4 accent-sky-500"
               />
-              🌐 เปิด browser อัตโนมัติเมื่อ service พร้อม
+              <Globe size={14} className="text-neutral-500" /> เปิด browser อัตโนมัติเมื่อ service พร้อม
             </label>
 
             {/* depends-on: โชว์เฉพาะตอน edit และมี service อื่นให้เลือก — start ตัวพวกนี้ก่อน */}
@@ -230,14 +231,14 @@ function ChooseStep({
   picking: boolean;
   error: string;
 }) {
-  const Card = ({ icon, title, desc, onClick }: { icon: string; title: string; desc: string; onClick: () => void }) => (
+  const Card = ({ icon: Icon, title, desc, onClick }: { icon: typeof FolderSearch; title: string; desc: string; onClick: () => void }) => (
     <button
       type="button"
       onClick={onClick}
       disabled={picking}
-      className="flex flex-1 flex-col gap-2 rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 text-left transition hover:border-sky-500/60 hover:bg-neutral-800/60 disabled:opacity-50"
+      className="flex flex-1 flex-col gap-2 rounded-lg border border-neutral-800 bg-neutral-900/60 p-5 text-left transition hover:border-sky-500/60 hover:bg-neutral-800/60 disabled:opacity-50"
     >
-      <span className="text-2xl">{icon}</span>
+      <Icon size={22} className="text-sky-400" />
       <div className="font-semibold text-neutral-100">{title}</div>
       <div className="text-xs leading-relaxed text-neutral-500">{desc}</div>
     </button>
@@ -251,13 +252,13 @@ function ChooseStep({
       </div>
       <div className="flex gap-3">
         <Card
-          icon="📁"
+          icon={FolderSearch}
           title={picking ? 'Scanning…' : 'Import Project'}
           desc="Import an existing project and configure it automatically."
           onClick={onScan}
         />
         <Card
-          icon="⚙️"
+          icon={Settings2}
           title="Manual Setup"
           desc="Add a custom service with your own startup command."
           onClick={onCustom}

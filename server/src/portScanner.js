@@ -110,6 +110,37 @@ export class PortScanner extends EventEmitter {
     return this.ports.find((p) => p.port === port)?.pid ?? null;
   }
 
+  // ย้อนหา listening port ที่ owner อยู่ใน process tree ของ rootPid (ไว้รู้ port ของ external service)
+  portForPid(rootPid) {
+    if (!rootPid) return null;
+    const tree = new Set(this.treePids(rootPid));
+    return this.ports.find((p) => tree.has(p.pid))?.port ?? null;
+  }
+
+  // process ที่ "รันโปรแกรมจริง" (dev server/runtime) ไม่ใช่ shell/editor/เครื่องมือที่แค่พาดพิงถึง path
+  // ป้องกัน false positive: bash ที่ cd เข้าโฟลเดอร์, VS Code ที่เปิดไฟล์ ฯลฯ
+  static RUNTIME_NAMES = /^(node|java|python|python3|py|php|ruby|dotnet|deno|bun|go|cargo|rust|nginx|redis-server|mongod|postgres|mysqld)/i;
+
+  // หา pid ของ process ที่ commandLine มี path cwd ฝังอยู่ (ไว้ detect service ที่รันนอกแอป)
+  // คืน pid ที่เป็น "ราก" ของ tree มากที่สุด (ppid ไม่ได้อยู่ในกลุ่มที่ match) เพื่อให้ treePids ครอบคลุม
+  pidForCwd(cwd) {
+    if (!cwd) return null;
+    // normalize: เทียบแบบ case-insensitive และรับได้ทั้ง \ และ /
+    const needle = cwd.replace(/\//g, '\\').toLowerCase();
+    const matched = [];
+    for (const proc of this.processes.values()) {
+      // เอาเฉพาะ runtime จริง ไม่เอา shell/editor ที่แค่มี path ปนใน command line
+      if (!PortScanner.RUNTIME_NAMES.test(proc.name || '')) continue;
+      const cmd = (proc.commandLine || '').replace(/\//g, '\\').toLowerCase();
+      if (cmd.includes(needle)) matched.push(proc);
+    }
+    if (matched.length === 0) return null;
+    // เลือกตัวที่ ppid ไม่ได้อยู่ในกลุ่ม matched (ใกล้รากสุด) — ให้ treePids จับลูกได้ครบ
+    const matchedPids = new Set(matched.map((p) => p.pid));
+    const root = matched.find((p) => !matchedPids.has(p.ppid)) ?? matched[0];
+    return root.pid;
+  }
+
   // pid ทั้งหมดใน process tree ที่มี rootPid เป็นราก (BFS จาก ppid map)
   treePids(rootPid) {
     const children = new Map();

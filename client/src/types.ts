@@ -59,7 +59,7 @@ export interface ScannedProject {
 export type ServerMessage =
   | { type: 'init'; services: ServiceView[]; ports: PortInfo[] }
   | { type: 'services'; services: ServiceView[] }
-  | { type: 'status'; id: string; status: ServiceStatus; phase?: StartPhase; pid?: number; exitCode?: number | null }
+  | { type: 'status'; id: string; status: ServiceStatus; phase?: StartPhase; pid?: number; port?: number; exitCode?: number | null }
   | { type: 'stats'; stats: Record<string, ServiceStats> }
   | { type: 'ports'; ports: PortInfo[] }
   | ({ type: 'log'; id: string } & LogEntry);

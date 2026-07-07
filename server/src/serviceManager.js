@@ -37,8 +37,15 @@ export class ServiceManager extends EventEmitter {
     const service = this.getService(id);
     const rt = this.runtime.get(id);
     if (rt?.child) return { status: rt.status, pid: rt.pid, phase: rt.status === 'starting' ? rt.phase : undefined };
+    // external: รันอยู่แต่ไม่ได้ start ผ่านแอป — เช็ค port ก่อน (แม่นสุด) ไม่เจอค่อยเช็ค command+cwd
     if (service?.port && this.scanner.isPortListening(service.port)) {
       return { status: 'external', pid: this.scanner.pidForPort(service.port) };
+    }
+    const cwdPid = this.scanner.pidForCwd(service?.cwd);
+    if (cwdPid) {
+      // ย้อนหา port ที่ process tree นี้ listen อยู่ (ถ้ามี) เพื่อให้การ์ดโชว์ port ได้
+      const port = this.scanner.portForPid(cwdPid);
+      return { status: 'external', pid: cwdPid, ...(port ? { port } : {}) };
     }
     if (rt?.status === 'crashed') return { status: 'crashed', exitCode: rt.exitCode };
     return { status: 'stopped' };
@@ -278,8 +285,8 @@ export class ServiceManager extends EventEmitter {
 
   _emitStatus(id, onlyIfChanged = false) {
     const state = this.statusOf(id);
-    // dedup ด้วย status + phase (phase เปลี่ยนตอน starting ต้อง broadcast ด้วย)
-    const key = `${state.status}:${state.phase ?? ''}`;
+    // dedup ด้วย status + phase + port (external ที่ port เพิ่งขึ้นต้อง broadcast แม้ status เดิม)
+    const key = `${state.status}:${state.phase ?? ''}:${state.port ?? ''}`;
     if (onlyIfChanged && this.lastStatus.get(id) === key) return;
     this.lastStatus.set(id, key);
     this.emit('status', { id, ...state });
