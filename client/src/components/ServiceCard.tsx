@@ -3,8 +3,8 @@ import type { ServiceStatus, ServiceView } from '../types';
 import { formatBytes } from '../api';
 import { Badge, IconButton, StatusDot } from '../ui';
 import {
-  Play, Square, RotateCw, ScrollText, Globe, FolderOpen, SquareTerminal,
-  Star, Pencil, Trash2, Cpu, MemoryStick, Hash,
+  Play, Square, X, RotateCw, ScrollText, Globe, FolderOpen, SquareTerminal,
+  Star, Pencil, Trash2, Cpu, MemoryStick, Hash, MoreVertical,
 } from '../ui/icons';
 
 // สี + label ของแต่ละสถานะ — external ใช้ visuals เดียวกับ running (เขียว) แล้วโชว์ badge แยก
@@ -25,28 +25,34 @@ interface Props {
   onLogs: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onOpenFolder: (app?: 'code') => void;
+  onOpenFolder: (app?: 'code' | 'terminal') => void;
   onTogglePin: () => void;
 }
 
 export function ServiceCard({ service, busy, onAction, onLogs, onEdit, onDelete, onOpenFolder, onTogglePin }: Props) {
   const [expanded, setExpanded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const style = STATUS_STYLE[service.status];
   const isUp = service.status === 'running' || service.status === 'starting' || service.status === 'external';
   const canStart = service.status === 'stopped' || service.status === 'crashed';
 
+  const runMenuAction = (action: () => void) => {
+    setMenuOpen(false);
+    action();
+  };
+
   return (
-    <div className="group flex flex-col gap-3 rounded-lg border border-neutral-800 bg-neutral-900/60 p-4 transition hover:border-neutral-700">
+    <div className="group flex flex-col gap-4 rounded-lg border border-neutral-800 bg-neutral-900/60 p-5 transition hover:border-neutral-700">
       {/* ---- แถวบน: ชื่อ + status (เห็นตลอด) + ปุ่มจัดการ ---- */}
       <div className="flex items-start justify-between gap-2">
         <button type="button" onClick={() => setExpanded((e) => !e)} className="min-w-0 flex-1 text-left">
-          <div className="flex items-center gap-2">
-            <StatusDot className={style.dot} pulse={service.status === 'starting'} />
+          <div className="flex items-center gap-2.5">
             <h3 className="truncate text-base font-bold tracking-tight text-neutral-100">{service.name}</h3>
             {service.status === 'external' && <Badge tone="info">External</Badge>}
           </div>
-          <div className="mt-1.5 flex items-center gap-2">
-            <span className={`text-[11px] font-medium uppercase tracking-wider ${style.text}`}>
+          <div className="mt-2 flex items-center gap-2">
+            <StatusDot className={style.dot} pulse={service.status === 'starting'} />
+            <span className={`text-[10px] font-semibold uppercase tracking-wider ${style.text}`}>
               {style.label}
               {service.status === 'crashed' && service.exitCode != null && ` · exit ${service.exitCode}`}
             </span>
@@ -56,9 +62,9 @@ export function ServiceCard({ service, busy, onAction, onLogs, onEdit, onDelete,
                 target="_blank"
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="text-xs text-neutral-400 hover:text-sky-400 hover:underline"
+                className="text-[11px] text-neutral-500 hover:text-sky-400 hover:underline"
               >
-                :{service.port}
+                Port {service.port}
               </a>
             )}
           </div>
@@ -94,8 +100,8 @@ export function ServiceCard({ service, busy, onAction, onLogs, onEdit, onDelete,
         )}
       </div>
 
-      {/* ---- แถวปุ่มหลัก: Start/Stop เด่น + Restart ---- */}
-      <div className="flex items-center gap-2">
+      {/* ---- แถวปุ่มหลัก: Start/Stop เด่น + Restart (ใช้ spacing แทนเส้นแบ่ง) ---- */}
+      <div className="mt-1 flex items-center gap-2">
         {canStart ? (
           <button
             type="button"
@@ -112,44 +118,70 @@ export function ServiceCard({ service, busy, onAction, onLogs, onEdit, onDelete,
             onClick={() => onAction('stop')}
             disabled={!!busy}
             title="Kill this process (running outside LocalDeck)"
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-red-500/40 px-3 py-1.5 text-sm font-medium text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-neutral-700 px-3 py-1.5 text-sm font-medium text-neutral-300 transition hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
           >
-            <Square size={13} /> {busy === 'stop' ? 'Killing…' : 'Kill External'}
+            <X size={15} /> {busy === 'stop' ? 'Killing…' : 'Kill External'}
           </button>
         ) : (
           <button
             type="button"
             onClick={() => onAction('stop')}
             disabled={!!busy}
-            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-neutral-800 px-3 py-1.5 text-sm font-medium text-red-400 transition hover:bg-red-500/10 disabled:opacity-50"
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-neutral-800 px-3 py-1.5 text-sm font-medium text-neutral-300 transition hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
           >
             <Square size={13} /> {busy === 'stop' ? 'Stopping…' : 'Stop'}
           </button>
         )}
-        <IconButton
-          icon={RotateCw}
-          title="Restart"
-          onClick={() => onAction('restart')}
-          disabled={!!busy || service.status === 'external'}
-          className="border border-neutral-800"
-        />
-      </div>
-
-      {/* ---- ระดับ 3: action รอง (เผยตอนคลิกการ์ด) ---- */}
-      {expanded && (
-        <div className="flex items-center gap-1 pt-1">
-          <IconButton icon={ScrollText} title="Logs" onClick={onLogs} className="border border-neutral-800" />
+        <div className="relative">
           <IconButton
-            icon={Globe}
-            title="Open in browser"
-            onClick={() => window.open(`http://localhost:${service.port}`, '_blank')}
-            disabled={!service.port || !isUp}
+            icon={MoreVertical}
+            title="More actions"
+            onClick={() => setMenuOpen((open) => !open)}
             className="border border-neutral-800"
           />
-          <IconButton icon={FolderOpen} title="Open folder" onClick={() => onOpenFolder()} className="border border-neutral-800" />
-          <IconButton icon={SquareTerminal} title="Open in VS Code" onClick={() => onOpenFolder('code')} className="border border-neutral-800" />
+          {menuOpen && (
+            <div className="absolute right-0 top-9 z-20 w-40 overflow-hidden rounded-md border border-neutral-800 bg-neutral-950 py-1 shadow-xl shadow-black/30">
+              <button
+                type="button"
+                onClick={() => runMenuAction(() => onAction('restart'))}
+                disabled={!!busy || service.status === 'external'}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-neutral-300 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-700"
+              >
+                <RotateCw size={13} /> Restart
+              </button>
+              <button
+                type="button"
+                onClick={() => runMenuAction(onLogs)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-neutral-300 hover:bg-neutral-900"
+              >
+                <ScrollText size={13} /> Logs
+              </button>
+              <button
+                type="button"
+                onClick={() => runMenuAction(() => window.open(`http://localhost:${service.port}`, '_blank'))}
+                disabled={!service.port || !isUp}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-neutral-300 hover:bg-neutral-900 disabled:cursor-not-allowed disabled:text-neutral-700"
+              >
+                <Globe size={13} /> Open
+              </button>
+              <button
+                type="button"
+                onClick={() => runMenuAction(() => onOpenFolder())}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-neutral-300 hover:bg-neutral-900"
+              >
+                <FolderOpen size={13} /> Folder
+              </button>
+              <button
+                type="button"
+                onClick={() => runMenuAction(() => onOpenFolder('terminal'))}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-neutral-300 hover:bg-neutral-900"
+              >
+                <SquareTerminal size={13} /> Terminal
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

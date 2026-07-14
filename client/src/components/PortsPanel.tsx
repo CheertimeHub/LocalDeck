@@ -24,7 +24,7 @@ export function PortsPanel({ ports }: { ports: PortInfo[] }) {
   return (
     <section>
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-neutral-500">
-        Listening Ports <span className="ml-1 font-normal text-neutral-600">({ports.length})</span>
+        Ports <span className="ml-1 font-normal text-neutral-600">({ports.length})</span>
       </h2>
       <div className="no-scrollbar max-h-[40vh] overflow-auto rounded-lg border border-neutral-800">
         <table className="w-full text-left text-sm">
@@ -66,7 +66,7 @@ export function PortsPanel({ ports }: { ports: PortInfo[] }) {
                         disabled={killing === p.pid}
                         className="rounded px-2 py-1 text-xs text-neutral-500 hover:bg-red-500/10 hover:text-red-400 disabled:opacity-50"
                       >
-                        {killing === p.pid ? '…' : 'kill'}
+                        {killing === p.pid ? '...' : 'Kill'}
                       </button>
                     )}
                   </td>

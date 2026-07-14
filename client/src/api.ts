@@ -33,7 +33,7 @@ export const api = {
   clearLogs: (id: string) => req(`/services/${id}/logs`, { method: 'DELETE' }),
   ports: () => req<PortInfo[]>('/ports'),
   killPid: (pid: number) => post(`/ports/${pid}/kill`),
-  openFolder: (id: string, app?: 'code') => post(`/services/${id}/open-folder${app ? `?app=${app}` : ''}`),
+  openFolder: (id: string, app?: 'code' | 'terminal') => post(`/services/${id}/open-folder${app ? `?app=${app}` : ''}`),
   pickFolder: (initial?: string) =>
     req<{ cwd: string | null }>('/pick-folder', {
       method: 'POST',

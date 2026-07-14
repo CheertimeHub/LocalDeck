@@ -185,6 +185,8 @@ app.post('/api/services/:id/open-folder', wrap((req) => {
   if (!service) throw httpError(404, 'service not found');
   if (req.query.app === 'code') {
     spawn('cmd', ['/c', 'code', '.'], { cwd: service.cwd, windowsHide: true, detached: true }).unref();
+  } else if (req.query.app === 'terminal') {
+    spawn('cmd', ['/c', 'start', '""', 'cmd', '/k', `cd /d "${service.cwd}"`], { windowsHide: true, detached: true }).unref();
   } else {
     // explorer คืน exit code 1 เสมอ ไม่ต้องเช็ค
     spawn('explorer', [service.cwd], { windowsHide: true, detached: true }).unref();

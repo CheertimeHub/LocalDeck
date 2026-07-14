@@ -11,6 +11,31 @@ import { Input, StatusDot } from './ui';
 import { Terminal, Search, Plus, Star, Folder, Play, Square } from './ui/icons';
 
 const MAX_CLIENT_LOGS = 2000;
+const COMPACT_GROUP_WORDS = ['project', 'sales', 'sale', 'costing', 'backend', 'frontend', 'portal', 'admin', 'client', 'server', 'api'];
+
+function titleWord(word: string) {
+  const normalized = word.toLowerCase();
+  if (normalized === 'api') return 'API';
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function splitCompactGroupName(value: string) {
+  const words: string[] = [];
+  let remaining = value.toLowerCase();
+  while (remaining) {
+    const match = COMPACT_GROUP_WORDS.find((word) => remaining.startsWith(word));
+    if (!match) return null;
+    words.push(match);
+    remaining = remaining.slice(match.length);
+  }
+  return words;
+}
+
+function formatGroupLabel(group: string) {
+  const compactWords = /^[A-Z0-9]+$/.test(group) ? splitCompactGroupName(group) : null;
+  const source = compactWords?.join(' ') ?? group.replace(/[_-]+/g, ' ').replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+  return source.split(/\s+/).filter(Boolean).map(titleWord).join(' ');
+}
 
 export default function App() {
   const [services, setServices] = useState<ServiceView[]>([]);
@@ -284,11 +309,11 @@ export default function App() {
             // ตัวที่ start ได้ (stopped/crashed) และตัวที่ stop ได้ (กำลังทำงาน)
             const startable = items.filter((s) => s.status === 'stopped' || s.status === 'crashed').map((s) => s.id);
             const stoppable = items.filter((s) => s.status === 'running' || s.status === 'starting' || s.status === 'external').map((s) => s.id);
-            const label = group || 'Ungrouped';
+            const label = group ? formatGroupLabel(group) : 'Ungrouped';
             return (
               <section key={group || '__ungrouped__'} className="group/section space-y-3">
                 <div className="flex items-center gap-2">
-                  <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+                  <h2 className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-neutral-400">
                     {group && <Folder size={13} className="text-neutral-600" />}
                     {label}
                     <span className="font-normal normal-case tracking-normal text-neutral-600">{upCount}/{items.length} up</span>
@@ -308,7 +333,7 @@ export default function App() {
                       <button
                         type="button"
                         onClick={() => groupAction(stoppable, 'stop')}
-                        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-red-400 hover:bg-red-500/10"
+                        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-xs text-neutral-400 hover:bg-red-500/10 hover:text-red-400"
                       >
                         <Square size={10} /> Stop all
                       </button>

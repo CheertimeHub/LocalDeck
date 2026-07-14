@@ -13,6 +13,7 @@ export {
   Trash2,
   Cpu,
   MemoryStick,
+  MoreVertical,
   Search,
   Plus,
   X,
